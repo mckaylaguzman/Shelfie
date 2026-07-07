@@ -1,0 +1,52 @@
+---
+description: Standing project rules for Shelfie — responsive UI, Expo compatibility, aesthetic, and scope
+alwaysApply: true
+---
+
+# Shelfie Project Standards
+
+## 1. Responsive layouts (iPhone and iPad)
+
+All UI must adapt to phone and tablet screen sizes.
+
+- Use flexible layouts: `flex`, `flexWrap`, `percentage` widths, `maxWidth`, and `gap` — not fixed widths for major layout regions.
+- Use `useWindowDimensions()` when breakpoints or size-dependent layout are needed.
+- Prefer `SafeAreaView` / `useSafeAreaInsets()` for edge spacing.
+- Test mentally for both narrow (iPhone) and wide (iPad) viewports.
+
+```tsx
+// ❌ BAD — hardcoded layout width
+<View style={{ width: 375 }}>
+
+// ✅ GOOD — flexible, size-aware
+const { width } = useWindowDimensions();
+const isTablet = width >= 768;
+<View style={{ flex: 1, paddingHorizontal: isTablet ? 32 : 16, maxWidth: 720, alignSelf: 'center', width: '100%' }}>
+```
+
+## 2. Expo-compatible packages only
+
+This app must run in **Expo Go** without custom native builds.
+
+- Only add packages listed in [Expo SDK docs](https://docs.expo.dev/versions/latest/) or marked Expo-compatible.
+- Do **not** add bare React Native libraries that require `pod install`, manual linking, or config plugins unless explicitly requested and compatible.
+- Prefer Expo modules (`expo-*`) over community native alternatives.
+- Before adding a dependency, confirm it works with the project's Expo SDK version (~54).
+
+## 3. Warm, cozy reading-nook aesthetic
+
+Keep a consistent warm, inviting feel across all screens and components.
+
+- **Palette**: warm neutrals, soft creams, paper tones, muted browns, gentle accent colors — avoid cold grays and harsh pure black/white.
+- **Typography**: prefer serif or rounded fonts for headings; readable body text with comfortable line height.
+- **Spacing**: generous padding and breathing room; uncluttered layouts.
+- **Surfaces**: soft corners, subtle shadows or borders — nothing sharp or clinical.
+- **Theme tokens**: extend `constants/theme.ts` for shared colors/fonts; reuse `ThemedText` and `ThemedView` instead of one-off styles.
+
+## 4. Minimal scope
+
+Only modify files directly related to the current request.
+
+- Do not refactor, rename, or "clean up" unrelated files.
+- Do not change dependencies, config, or shared utilities unless the task requires it.
+- If a fix can be made in one file, do not touch others.
