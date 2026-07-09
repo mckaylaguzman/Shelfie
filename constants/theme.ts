@@ -1,41 +1,43 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Navigation and hook-facing color tokens derived from the app palette.
  */
 
 import { Platform } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+import { palette } from '@/utils/theme';
 
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#fff',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
+    text: palette.light.text,
+    textSecondary: palette.light.textSecondary,
+    background: palette.light.background,
+    card: palette.light.card,
+    tint: palette.light.primary,
+    icon: palette.light.textSecondary,
+    tabIconDefault: palette.light.textSecondary,
+    tabIconSelected: palette.light.primary,
+    primary: palette.light.primary,
+    link: palette.light.primary,
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
-    tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: tintColorDark,
+    text: palette.dark.text,
+    textSecondary: palette.dark.textSecondary,
+    background: palette.dark.background,
+    card: palette.dark.card,
+    tint: palette.dark.primary,
+    icon: palette.dark.textSecondary,
+    tabIconDefault: palette.dark.textSecondary,
+    tabIconSelected: palette.dark.primary,
+    primary: palette.dark.primary,
+    link: palette.dark.primary,
   },
 };
 
 export const Fonts = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
     sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
     serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
     rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
     mono: 'ui-monospace',
   },
   default: {
@@ -51,3 +53,20 @@ export const Fonts = Platform.select({
     mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
   },
 });
+
+export const navigationTheme = {
+  light: {
+    background: palette.light.background,
+    card: palette.light.card,
+    text: palette.light.text,
+    border: palette.light.border,
+    primary: palette.light.primary,
+  },
+  dark: {
+    background: palette.dark.background,
+    card: palette.dark.card,
+    text: palette.dark.text,
+    border: palette.dark.border,
+    primary: palette.dark.primary,
+  },
+};

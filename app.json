@@ -45,7 +45,8 @@
         {
           "photosPermission": "Allow Shelfie to access your photos to add book covers."
         }
-      ]
+      ],
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,
