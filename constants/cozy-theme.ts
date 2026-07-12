@@ -1,8 +1,12 @@
 export const TABLET_BREAKPOINT = 768;
 export const LARGE_TABLET_BREAKPOINT = 1024;
-export const MAX_CONTENT_WIDTH = 560;
-export const TABLET_CONTENT_WIDTH = 720;
-export const LARGE_TABLET_CONTENT_WIDTH = 860;
+
+/** Shared screen column — 20px side inset on phone, up to 700px centered on tablet. */
+export const SCREEN_HORIZONTAL_PADDING = 20;
+export const SCREEN_MAX_CONTENT_WIDTH = 700;
+
+/** @deprecated Use SCREEN_MAX_CONTENT_WIDTH */
+export const MAX_CONTENT_WIDTH = SCREEN_MAX_CONTENT_WIDTH;
 
 type LayoutOptions = {
   isPad?: boolean;
@@ -20,14 +24,24 @@ export function isLargeTabletLayout(screenWidth: number, options: LayoutOptions 
   return screenWidth >= LARGE_TABLET_BREAKPOINT;
 }
 
+export function getScreenContentLayout(screenWidth: number, options: LayoutOptions = {}) {
+  const isTablet = isTabletLayout(screenWidth, options);
+  const columnWidth = isTablet
+    ? Math.min(screenWidth, SCREEN_MAX_CONTENT_WIDTH)
+    : screenWidth - SCREEN_HORIZONTAL_PADDING * 2;
+  const edgeInset = (screenWidth - columnWidth) / 2;
+
+  return {
+    isTablet,
+    columnWidth,
+    edgeInset,
+    horizontalPadding: SCREEN_HORIZONTAL_PADDING,
+  };
+}
+
+/** @deprecated Use getScreenContentLayout */
 export function getHomeContentWidth(screenWidth: number, options: LayoutOptions = {}) {
-  if (isLargeTabletLayout(screenWidth, options)) {
-    return Math.min(screenWidth - 80, LARGE_TABLET_CONTENT_WIDTH);
-  }
-  if (isTabletLayout(screenWidth, options)) {
-    return Math.min(screenWidth - 48, TABLET_CONTENT_WIDTH);
-  }
-  return Math.min(screenWidth - 40, MAX_CONTENT_WIDTH);
+  return getScreenContentLayout(screenWidth, options).columnWidth;
 }
 
 export function formatBookDate(isoDate: string) {

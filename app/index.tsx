@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
 import { Image } from 'expo-image';
 import { useCallback, useMemo, useState } from 'react';
 import {
@@ -17,16 +17,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import BookDetailModal from '@/components/BookDetailModal';
 import BookForm from '@/components/BookForm';
+import { ScreenContainer, useScreenLayout } from '@/components/ScreenContainer';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import {
-  getHomeContentWidth,
-  isLargeTabletLayout,
-  isTabletLayout,
-} from '@/constants/cozy-theme';
+import { isLargeTabletLayout, isTabletLayout } from '@/constants/cozy-theme';
 import { Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { getAllBooks, type Book, type BookFormat } from '@/utils/storage';
+import { getAllBooks } from '@/src/services/storage';
+import type { Book, BookFormat } from '@/src/types/book';
 import {
   cardShadow,
   cardStyle,
@@ -487,6 +485,7 @@ function HomeHeader({
   readingCount,
   tbrCount,
   centered = false,
+  onProfilePress,
 }: {
   colors: ThemeColors;
   colorScheme: ColorScheme;
@@ -494,6 +493,7 @@ function HomeHeader({
   readingCount: number;
   tbrCount: number;
   centered?: boolean;
+  onProfilePress: () => void;
 }) {
   const contextLine =
     readingCount > 0
@@ -506,6 +506,16 @@ function HomeHeader({
 
   return (
     <View style={[styles.headerBlock, centered && styles.headerBlockCentered]}>
+      <View style={styles.headerTopRow}>
+        <View style={styles.headerTopSpacer} />
+        <Pressable
+          onPress={onProfilePress}
+          accessibilityRole="button"
+          accessibilityLabel="Open profile"
+          style={({ pressed }) => [styles.profileButton, pressed && styles.pressed]}>
+          <Ionicons name="person-circle-outline" size={32} color={colors.textSecondary} />
+        </Pressable>
+      </View>
       <ThemedText
         style={[
           centered ? styles.greetingTablet : styles.greeting,
@@ -566,8 +576,7 @@ export default function HomeScreen() {
   const layoutOptions = useMemo(() => ({ isPad }), [isPad]);
   const isTablet = isTabletLayout(width, layoutOptions);
   const isLargeTablet = isLargeTabletLayout(width, layoutOptions);
-  const horizontalPadding = isLargeTablet ? 48 : isTablet ? 32 : 20;
-  const contentWidth = getHomeContentWidth(width, layoutOptions);
+  const { edgeInset } = useScreenLayout();
   const carouselCoverWidth = isLargeTablet ? 160 : isTablet ? 140 : 104;
 
   const [books, setBooks] = useState<Book[]>([]);
@@ -645,16 +654,16 @@ export default function HomeScreen() {
     <ThemedView style={[styles.screen, { backgroundColor: colors.background }]}>
       {!hasAnyBooks ? (
         <ScrollView
+          style={styles.scroll}
           contentContainerStyle={[
             styles.emptyScrollContent,
             {
               paddingTop: insets.top + 16,
               paddingBottom: insets.bottom + 96,
-              paddingHorizontal: horizontalPadding,
             },
           ]}
           showsVerticalScrollIndicator={false}>
-          <View style={[styles.content, { maxWidth: contentWidth }]}>
+          <ScreenContainer>
             <HomeHeader
               colors={colors}
               colorScheme={colorScheme}
@@ -662,24 +671,24 @@ export default function HomeScreen() {
               readingCount={readingBooks.length}
               tbrCount={tbrBooks.length}
               centered={isTablet}
+              onProfilePress={() => router.push('/profile')}
             />
             <EmptyShelf colors={colors} colorScheme={colorScheme} />
-          </View>
+          </ScreenContainer>
         </ScrollView>
       ) : (
         <ScrollView
+          style={styles.scroll}
           contentContainerStyle={[
             styles.listContent,
             {
               paddingTop: insets.top + 16,
               paddingBottom: insets.bottom + 96,
-              paddingHorizontal: horizontalPadding,
-              alignItems: 'center',
             },
           ]}
           nestedScrollEnabled
           showsVerticalScrollIndicator={false}>
-          <View style={[styles.content, { maxWidth: contentWidth }]}>
+          <ScreenContainer>
             <HomeHeader
               colors={colors}
               colorScheme={colorScheme}
@@ -687,6 +696,7 @@ export default function HomeScreen() {
               readingCount={readingBooks.length}
               tbrCount={tbrBooks.length}
               centered={isTablet}
+              onProfilePress={() => router.push('/profile')}
             />
 
             {readingBooks.length > 0 && (
@@ -740,7 +750,7 @@ export default function HomeScreen() {
                 )}
               </View>
             )}
-          </View>
+          </ScreenContainer>
         </ScrollView>
       )}
 
@@ -753,7 +763,7 @@ export default function HomeScreen() {
           {
             backgroundColor: colors.primary,
             bottom: insets.bottom + 20,
-            right: horizontalPadding,
+            right: edgeInset,
           },
           fabShadow(colorScheme),
           pressed && { backgroundColor: colors.primaryPressed },
@@ -798,12 +808,12 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
-  content: {
-    width: '100%',
-    alignSelf: 'center',
+  scroll: {
+    flex: 1,
   },
   listContent: {
     flexGrow: 1,
+    alignItems: 'center',
   },
   emptyScrollContent: {
     flexGrow: 1,
@@ -814,6 +824,17 @@ const styles = StyleSheet.create({
   },
   headerBlockCentered: {
     alignItems: 'center',
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  headerTopSpacer: {
+    flex: 1,
+  },
+  profileButton: {
+    padding: 4,
   },
   greeting: {
     fontSize: 28,

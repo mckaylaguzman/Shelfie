@@ -1,12 +1,12 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
-import { GoogleBooksSearchError, searchGoogleBooks } from '@/utils/google-books';
+import { GoogleBooksSearchError, searchGoogleBooks } from '@/src/services/googleBooks';
 import {
   downloadOpenLibraryCover,
   OpenLibrarySearchError,
   searchOpenLibrary,
   type OpenLibraryBook,
-} from '@/utils/open-library';
+} from '@/src/services/openLibrary';
 
 export type BookSearchResult = {
   id: string;
@@ -24,6 +24,11 @@ export class BookSearchError extends Error {
     this.kind = kind;
   }
 }
+
+export type BookSearchStatus = 'idle' | 'loading' | 'no-results' | 'offline';
+
+export const BOOK_SEARCH_DEBOUNCE_MS = 400;
+export const BOOK_SEARCH_MIN_QUERY_LENGTH = 2;
 
 function mapOpenLibraryResult(result: OpenLibraryBook): BookSearchResult {
   return {
@@ -51,7 +56,7 @@ function toBookSearchError(error: GoogleBooksSearchError | OpenLibrarySearchErro
 
 export async function searchBooks(query: string): Promise<BookSearchResult[]> {
   const trimmed = query.trim();
-  if (trimmed.length < 2) {
+  if (trimmed.length < BOOK_SEARCH_MIN_QUERY_LENGTH) {
     return [];
   }
 
@@ -101,4 +106,32 @@ export async function downloadSearchCover(result: BookSearchResult): Promise<str
   }
 
   return null;
+}
+
+export async function runBookSearchQuery(query: string): Promise<{
+  status: BookSearchStatus;
+  results: BookSearchResult[];
+}> {
+  const trimmed = query.trim();
+  if (trimmed.length < BOOK_SEARCH_MIN_QUERY_LENGTH) {
+    return { status: 'idle', results: [] };
+  }
+
+  try {
+    const results = await searchBooks(trimmed);
+    return {
+      status: results.length === 0 ? 'no-results' : 'idle',
+      results,
+    };
+  } catch {
+    return { status: 'offline', results: [] };
+  }
+}
+
+export async function loadCoverForSearchResult(result: BookSearchResult): Promise<string | null> {
+  if (!result.coverId && !result.coverUrl) {
+    return null;
+  }
+
+  return downloadSearchCover(result);
 }

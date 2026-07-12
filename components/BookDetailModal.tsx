@@ -12,12 +12,14 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ScreenContainer } from '@/components/ScreenContainer';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { formatBookDate, isTabletLayout, MAX_CONTENT_WIDTH } from '@/constants/cozy-theme';
+import { formatBookDate, isTabletLayout } from '@/constants/cozy-theme';
 import { Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { deleteBook, getStatusLabel, type Book } from '@/utils/storage';
+import { deleteBook, getStatusLabel } from '@/src/services/storage';
+import type { Book } from '@/src/types/book';
 import {
   cardStyle,
   palette,
@@ -122,7 +124,6 @@ export default function BookDetailModal({
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const isTablet = isTabletLayout(width, { isPad: Platform.OS === 'ios' && Platform.isPad });
-  const horizontalPadding = isTablet ? 32 : 20;
   const coverWidth = isTablet ? 148 : 126;
   const maxReviewHeight = Math.round(height * 0.28);
 
@@ -161,10 +162,9 @@ export default function BookDetailModal({
             {
               paddingTop: insets.top + 12,
               paddingBottom: insets.bottom + 16,
-              paddingHorizontal: horizontalPadding,
             },
           ]}>
-          <View style={[styles.content, { maxWidth: MAX_CONTENT_WIDTH }]}>
+          <ScreenContainer style={styles.content}>
             <View style={styles.headerRow}>
               <Pressable
                 onPress={onClose}
@@ -275,7 +275,7 @@ export default function BookDetailModal({
                 </ThemedText>
               </Pressable>
             </View>
-          </View>
+          </ScreenContainer>
         </View>
       </ThemedView>
     </Modal>

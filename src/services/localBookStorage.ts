@@ -1,55 +1,18 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import * as SQLite from 'expo-sqlite';
 
+import { finishedFields } from '@/src/services/bookStorageUtils';
+import type { Book, BookInput, BookStatus, BookUpdate } from '@/src/types/book';
+
 const DB_NAME = 'shelfie.db';
 const COVERS_DIR = 'covers';
-
-export const BOOK_STATUSES = ['tbr', 'reading', 'finished'] as const;
-export type BookStatus = (typeof BOOK_STATUSES)[number];
-
-export const BOOK_FORMATS = ['physical', 'audiobook'] as const;
-export type BookFormat = (typeof BOOK_FORMATS)[number];
-
-export type Book = {
-  id: number;
-  title: string;
-  author: string;
-  status: BookStatus;
-  format: BookFormat;
-  rating: number;
-  dateFinished: string;
-  review: string;
-  coverImageUri: string | null;
-};
-
-export type BookInput = {
-  title: string;
-  author: string;
-  status: BookStatus;
-  format?: BookFormat;
-  rating?: number;
-  dateFinished?: Date;
-  review?: string;
-  coverImageUri: string | null;
-};
-
-export type BookUpdate = {
-  title?: string;
-  author?: string;
-  status?: BookStatus;
-  format?: BookFormat;
-  rating?: number;
-  dateFinished?: Date;
-  review?: string;
-  coverImageUri?: string | null;
-};
 
 type BookRow = {
   id: number;
   title: string;
   author: string;
   status: BookStatus;
-  format: BookFormat;
+  format: Book['format'];
   rating: number;
   dateFinished: string;
   review: string;
@@ -155,34 +118,7 @@ function rowToBook(row: BookRow): Book {
   };
 }
 
-function finishedFields(input: Pick<BookInput, 'status' | 'rating' | 'dateFinished' | 'review'>) {
-  if (input.status !== 'finished') {
-    return {
-      rating: 0,
-      dateFinished: '',
-      review: '',
-    };
-  }
-
-  return {
-    rating: input.rating ?? 0,
-    dateFinished: (input.dateFinished ?? new Date()).toISOString(),
-    review: input.review?.trim() ?? '',
-  };
-}
-
-export function getStatusLabel(status: BookStatus) {
-  switch (status) {
-    case 'tbr':
-      return 'TBR';
-    case 'reading':
-      return 'Reading';
-    case 'finished':
-      return 'Finished';
-  }
-}
-
-export async function addBook(input: BookInput): Promise<Book> {
+export async function addLocalBook(input: BookInput): Promise<Book> {
   const db = await getDb();
   const coverImageUri = await persistCoverImage(input.coverImageUri);
   const title = input.title.trim();
@@ -215,7 +151,7 @@ export async function addBook(input: BookInput): Promise<Book> {
   };
 }
 
-export async function getAllBooks(): Promise<Book[]> {
+export async function getAllLocalBooks(): Promise<Book[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<BookRow>(`
     SELECT * FROM books
@@ -232,7 +168,13 @@ export async function getAllBooks(): Promise<Book[]> {
   return rows.map(rowToBook);
 }
 
-export async function deleteBook(id: number): Promise<void> {
+export async function getLocalBookCount(): Promise<number> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM books');
+  return row?.count ?? 0;
+}
+
+export async function deleteLocalBook(id: number): Promise<void> {
   const db = await getDb();
   const existing = await db.getFirstAsync<Pick<BookRow, 'coverImageUri'>>(
     'SELECT coverImageUri FROM books WHERE id = ?',
@@ -247,7 +189,7 @@ export async function deleteBook(id: number): Promise<void> {
   await db.runAsync('DELETE FROM books WHERE id = ?', id);
 }
 
-export async function updateBook(id: number, updates: BookUpdate): Promise<Book> {
+export async function updateLocalBook(id: number, updates: BookUpdate): Promise<Book> {
   const db = await getDb();
   const existing = await db.getFirstAsync<BookRow>('SELECT * FROM books WHERE id = ?', id);
 
@@ -309,4 +251,15 @@ export async function updateBook(id: number, updates: BookUpdate): Promise<Book>
     review,
     coverImageUri,
   };
+}
+
+export async function clearAllLocalBooks(): Promise<void> {
+  const books = await getAllLocalBooks();
+
+  for (const book of books) {
+    await deleteCoverImage(book.coverImageUri);
+  }
+
+  const db = await getDb();
+  await db.runAsync('DELETE FROM books');
 }

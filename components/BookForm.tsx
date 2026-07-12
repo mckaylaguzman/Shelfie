@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -11,26 +11,25 @@ import {
   ScrollView,
   StyleSheet,
   TextInput,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ScreenContainer } from '@/components/ScreenContainer';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import {
-  isTabletLayout,
-  MAX_CONTENT_WIDTH,
-} from '@/constants/cozy-theme';
 import { Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
-  BookSearchError,
-  downloadSearchCover,
-  searchBooks,
+  BOOK_SEARCH_DEBOUNCE_MS,
+  BOOK_SEARCH_MIN_QUERY_LENGTH,
+  loadCoverForSearchResult,
+  runBookSearchQuery,
   type BookSearchResult,
-} from '@/utils/book-search';
-import { addBook, updateBook, type Book, type BookFormat, type BookStatus } from '@/utils/storage';
+  type BookSearchStatus,
+} from '@/src/services/bookSearch';
+import { addBook, updateBook } from '@/src/services/storage';
+import type { Book, BookFormat, BookStatus } from '@/src/types/book';
 import {
   cardShadow,
   palette,
@@ -193,8 +192,6 @@ function FormatPicker({ value, onChange, colors }: FormatPickerProps) {
   );
 }
 
-type SearchStatus = 'idle' | 'loading' | 'no-results' | 'offline';
-
 type SearchResultProps = {
   result: BookSearchResult;
   colors: ThemeColors;
@@ -235,10 +232,7 @@ function SearchResultRow({ result, colors, onSelect }: SearchResultProps) {
 export default function BookForm({ book, markFinished = false, onSaved, onCancel }: BookFormProps) {
   const colorScheme = (useColorScheme() ?? 'light') as ColorScheme;
   const colors = palette[colorScheme];
-  const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const isPad = Platform.OS === 'ios' && Platform.isPad;
-  const isTablet = isTabletLayout(width, { isPad });
   const isEditing = !!book && !markFinished;
   const isCompletionFlow = !!book && markFinished;
 
@@ -256,7 +250,7 @@ export default function BookForm({ book, markFinished = false, onSaved, onCancel
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<BookSearchResult[]>([]);
-  const [searchStatus, setSearchStatus] = useState<SearchStatus>('idle');
+  const [searchStatus, setSearchStatus] = useState<BookSearchStatus>('idle');
   const [isDownloadingCover, setIsDownloadingCover] = useState(false);
   const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRequestRef = useRef(0);
@@ -313,7 +307,7 @@ export default function BookForm({ book, markFinished = false, onSaved, onCancel
     }
 
     const trimmed = searchQuery.trim();
-    if (trimmed.length < 2) {
+    if (trimmed.length < BOOK_SEARCH_MIN_QUERY_LENGTH) {
       setSearchResults([]);
       setSearchStatus('idle');
       return;
@@ -323,42 +317,17 @@ export default function BookForm({ book, markFinished = false, onSaved, onCancel
     const requestId = ++searchRequestRef.current;
 
     const timeout = setTimeout(async () => {
-      try {
-        const results = await searchBooks(trimmed);
-        if (requestId !== searchRequestRef.current) {
-          return;
-        }
-
-        setSearchResults(results);
-        setSearchStatus(results.length === 0 ? 'no-results' : 'idle');
-      } catch (error) {
-        if (requestId !== searchRequestRef.current) {
-          return;
-        }
-
-        setSearchResults([]);
-        if (error instanceof BookSearchError && error.kind === 'offline') {
-          setSearchStatus('offline');
-        } else {
-          setSearchStatus('offline');
-        }
+      const { status, results } = await runBookSearchQuery(trimmed);
+      if (requestId !== searchRequestRef.current) {
+        return;
       }
-    }, 400);
+
+      setSearchResults(results);
+      setSearchStatus(status);
+    }, BOOK_SEARCH_DEBOUNCE_MS);
 
     return () => clearTimeout(timeout);
   }, [searchQuery, isEditing]);
-
-  const horizontalPadding = isTablet ? 32 : 20;
-
-  const contentStyle = useMemo(
-    () => ({
-      width: '100%' as const,
-      maxWidth: MAX_CONTENT_WIDTH,
-      alignSelf: 'center' as const,
-      paddingHorizontal: horizontalPadding,
-    }),
-    [horizontalPadding],
-  );
 
   const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
     if (Platform.OS === 'android') {
@@ -400,7 +369,7 @@ export default function BookForm({ book, markFinished = false, onSaved, onCancel
 
     setIsDownloadingCover(true);
     try {
-      const localCoverUri = await downloadSearchCover(result);
+      const localCoverUri = await loadCoverForSearchResult(result);
       if (localCoverUri) {
         setCoverUri(localCoverUri);
       }
@@ -515,7 +484,7 @@ export default function BookForm({ book, markFinished = false, onSaved, onCancel
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <View style={contentStyle}>
+          <ScreenContainer>
             {onCancel && (
               <Pressable
                 onPress={onCancel}
@@ -753,7 +722,7 @@ export default function BookForm({ book, markFinished = false, onSaved, onCancel
                 </ThemedText>
               </Pressable>
             </View>
-          </View>
+          </ScreenContainer>
         </ScrollView>
       </KeyboardAvoidingView>
     </ThemedView>
@@ -769,6 +738,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    alignItems: 'center',
   },
   closeButton: {
     alignSelf: 'flex-end',
