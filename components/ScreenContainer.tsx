@@ -2,6 +2,12 @@ import { Platform, StyleProp, View, ViewStyle, useWindowDimensions } from 'react
 
 import { getScreenContentLayout } from '@/constants/cozy-theme';
 
+/** Shared ScrollView contentContainerStyle for full screens and page-sheet modals. */
+export const screenScrollContentStyle: ViewStyle = {
+  flexGrow: 1,
+  alignItems: 'center',
+};
+
 type ScreenContainerProps = {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;

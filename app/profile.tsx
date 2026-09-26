@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { openBrowserAsync, WebBrowserPresentationStyle } from 'expo-web-browser';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
@@ -14,16 +15,20 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ScreenContainer, useScreenLayout } from '@/components/ScreenContainer';
+import { ScreenContainer, screenScrollContentStyle, useScreenLayout } from '@/components/ScreenContainer';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { isTabletLayout } from '@/constants/cozy-theme';
+import { PRIVACY_POLICY_URL } from '@/constants/legal';
 import { Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
   deleteAccount,
+  mapAuthError,
+  resendEmailVerification,
   resetPassword,
   signIn,
   signOutUser,
@@ -32,12 +37,18 @@ import {
 } from '@/src/services/auth';
 import { getLocalBookCount, migrateLocalBooksToCloud } from '@/src/services/bookMigration';
 import {
-  cardStyle,
+  cardShadow,
   palette,
   radii,
   type ColorScheme,
   type ThemeColors,
 } from '@/utils/theme';
+
+async function openPrivacyPolicy() {
+  await openBrowserAsync(PRIVACY_POLICY_URL, {
+    presentationStyle: WebBrowserPresentationStyle.AUTOMATIC,
+  });
+}
 
 type AuthMode = 'sign-in' | 'sign-up';
 
@@ -47,13 +58,15 @@ function ProfileHeader({
   colors,
   isTablet,
   onBack,
+  showTitle = true,
 }: {
   colors: ThemeColors;
   isTablet: boolean;
   onBack: () => void;
+  showTitle?: boolean;
 }) {
   return (
-    <View style={[styles.headerBlock, isTablet && styles.headerBlockCentered]}>
+    <View style={[styles.headerBlock, !showTitle && styles.headerBlockCompact]}>
       <View style={styles.headerTopRow}>
         <Pressable
           onPress={onBack}
@@ -64,35 +77,104 @@ function ProfileHeader({
         </Pressable>
         <View style={styles.headerTopSpacer} />
       </View>
-      <ThemedText
-        style={[
-          isTablet ? styles.greetingTablet : styles.greeting,
-          { color: colors.text, fontFamily: Fonts.serif, textAlign: isTablet ? 'center' : 'left' },
-        ]}>
-        Profile
-      </ThemedText>
+      {showTitle && (
+        <ThemedText
+          style={[
+            isTablet ? styles.greetingTablet : styles.greeting,
+            { color: colors.text, fontFamily: Fonts.serif, textAlign: isTablet ? 'center' : 'left' },
+          ]}>
+          Profile
+        </ThemedText>
+      )}
     </View>
   );
 }
 
-
-function FieldLabel({ label, colors }: { label: string; colors: ThemeColors }) {
+function AuthFeedback({
+  message,
+  tone,
+  colors,
+}: {
+  message: string;
+  tone: 'error' | 'success';
+  colors: ThemeColors;
+}) {
   return (
-    <ThemedText style={[styles.label, { color: colors.textSecondary, fontFamily: Fonts.rounded }]}>
-      {label}
+    <ThemedText
+      style={[
+        styles.feedbackText,
+        { color: tone === 'error' ? colors.danger : colors.olive, fontFamily: Fonts.rounded },
+      ]}>
+      {message}
     </ThemedText>
   );
 }
 
-function AuthHeroHeader({ colors }: { colors: ThemeColors }) {
+function AuthFieldGroup({
+  email,
+  password,
+  isSignUp,
+  isBusy,
+  colors,
+  colorScheme,
+  onEmailChange,
+  onPasswordChange,
+}: {
+  email: string;
+  password: string;
+  isSignUp: boolean;
+  isBusy: boolean;
+  colors: ThemeColors;
+  colorScheme: ColorScheme;
+  onEmailChange: (value: string) => void;
+  onPasswordChange: (value: string) => void;
+}) {
+  const [showPassword, setShowPassword] = useState(false);
+
   return (
-    <View style={styles.authHero}>
-      <ThemedText style={[styles.cardTitle, { color: colors.text, fontFamily: Fonts.serif, textAlign: 'center' }]}>
-        Sync your shelf across devices
-      </ThemedText>
-      <ThemedText style={[styles.cardSubtitle, { color: colors.textSecondary, textAlign: 'center' }]}>
-        Sign in to keep your books backed up. Your shelf works fully without an account too.
-      </ThemedText>
+    <View style={[styles.fieldGroup, { backgroundColor: colors.card }, cardShadow(colorScheme)]}>
+      <View style={styles.fieldRow}>
+        <TextInput
+          value={email}
+          onChangeText={onEmailChange}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="email-address"
+          textContentType="emailAddress"
+          placeholder="Email"
+          placeholderTextColor={colors.placeholder}
+          editable={!isBusy}
+          style={[styles.fieldInput, { color: colors.text }]}
+        />
+      </View>
+
+      <View style={[styles.fieldSeparator, { backgroundColor: colors.border }]} />
+
+      <View style={styles.fieldRow}>
+        <TextInput
+          value={password}
+          onChangeText={onPasswordChange}
+          secureTextEntry={!showPassword}
+          textContentType={isSignUp ? 'newPassword' : 'password'}
+          placeholder={isSignUp ? 'Password' : 'Password'}
+          placeholderTextColor={colors.placeholder}
+          editable={!isBusy}
+          style={[styles.fieldInput, styles.fieldInputWithIcon, { color: colors.text }]}
+        />
+        <Pressable
+          onPress={() => setShowPassword((current) => !current)}
+          disabled={isBusy}
+          accessibilityRole="button"
+          accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+          hitSlop={8}
+          style={({ pressed }) => [styles.passwordToggle, pressed && styles.pressed]}>
+          <Ionicons
+            name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+            size={20}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -110,10 +192,12 @@ function SignedOutView({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const isSignUp = mode === 'sign-up';
+  const isBusy = isSubmitting || isResettingPassword;
 
   const switchMode = (next: AuthMode) => {
     setMode(next);
@@ -135,7 +219,7 @@ function SignedOutView({
 
       if (isSignUp) {
         const user = await signUp(email, password);
-        setSuccessMessage('Account created. Welcome to Shelfie!');
+        setSuccessMessage('Account created. Check your inbox to verify your email.');
         setPassword('');
         onAuthSuccess(user.uid, localBookCount);
         return;
@@ -145,149 +229,136 @@ function SignedOutView({
       setSuccessMessage('Signed in successfully.');
       onAuthSuccess(user.uid, localBookCount);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Something went wrong. Please try again.');
+      setErrorMessage(mapAuthError(error));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleResetPassword = async () => {
-    if (isSubmitting) {
+    if (isBusy) {
       return;
     }
 
     setErrorMessage(null);
     setSuccessMessage(null);
-    setIsSubmitting(true);
+    setIsResettingPassword(true);
 
     try {
       await resetPassword(email);
       setSuccessMessage('Password reset email sent. Check your inbox.');
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Something went wrong. Please try again.');
+      setErrorMessage(mapAuthError(error));
     } finally {
-      setIsSubmitting(false);
+      setIsResettingPassword(false);
     }
   };
 
   return (
-    <View style={[styles.card, styles.authCard, cardStyle(colorScheme)]}>
-      <AuthHeroHeader colors={colors} />
-
-      {errorMessage && (
-        <View style={[styles.banner, { backgroundColor: colors.input, borderColor: colors.danger }]}>
-          <Ionicons name="alert-circle-outline" size={20} color={colors.danger} />
-          <ThemedText style={[styles.bannerText, { color: colors.danger }]}>{errorMessage}</ThemedText>
-        </View>
-      )}
-
-      {successMessage && (
-        <View style={[styles.banner, { backgroundColor: colors.input, borderColor: colors.olive }]}>
-          <Ionicons name="checkmark-circle-outline" size={20} color={colors.olive} />
-          <ThemedText style={[styles.bannerText, { color: colors.olive }]}>{successMessage}</ThemedText>
-        </View>
-      )}
-
-      <FieldLabel label="Email" colors={colors} />
-      <TextInput
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="email-address"
-        textContentType="emailAddress"
-        placeholder="you@example.com"
-        placeholderTextColor={colors.placeholder}
-        style={[
-          styles.input,
-          {
-            color: colors.text,
-            backgroundColor: colors.input,
-            borderColor: colors.border,
-          },
-        ]}
-      />
-
-      <FieldLabel label="Password" colors={colors} />
-      <TextInput
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        textContentType={isSignUp ? 'newPassword' : 'password'}
-        placeholder={isSignUp ? 'Choose a password' : 'Your password'}
-        placeholderTextColor={colors.placeholder}
-        style={[
-          styles.input,
-          {
-            color: colors.text,
-            backgroundColor: colors.input,
-            borderColor: colors.border,
-          },
-        ]}
-      />
-      {isSignUp && (
-        <ThemedText style={[styles.fieldHint, { color: colors.textSecondary, fontFamily: Fonts.rounded }]}>
-          At least 6 characters
-        </ThemedText>
-      )}
-
-      <Pressable
-        onPress={handleSubmit}
-        disabled={isSubmitting}
-        accessibilityRole="button"
-        accessibilityLabel={isSignUp ? 'Create my shelf' : 'Sign in'}
-        style={({ pressed }) => [
-          styles.primaryButton,
-          { backgroundColor: colors.primary },
-          (pressed || isSubmitting) && { backgroundColor: colors.primaryPressed },
-          isSubmitting && styles.buttonDisabled,
-        ]}>
-        {isSubmitting ? (
-          <ActivityIndicator color={colors.onPrimary} />
-        ) : (
-          <ThemedText style={[styles.primaryButtonText, { color: colors.onPrimary, fontFamily: Fonts.rounded }]}>
-            {isSignUp ? 'Create my shelf' : 'Sign in'}
+    <View style={styles.authSheet}>
+      <Animated.View
+        key={mode}
+        entering={FadeInDown.springify().damping(20).stiffness(240)}
+        exiting={FadeOut.duration(120)}
+        style={styles.authAnimatedBlock}>
+        <View style={styles.authIntro}>
+          <ThemedText style={[styles.authTitle, { color: colors.text, fontFamily: Fonts.rounded }]}>
+            Sync your shelf
           </ThemedText>
-        )}
-      </Pressable>
+          <ThemedText style={[styles.authSubtitle, { color: colors.textSecondary, fontFamily: Fonts.rounded }]}>
+            {isSignUp
+              ? 'Create an account to back up your books across devices.'
+              : 'Sign in to access your books anywhere.'}
+          </ThemedText>
+        </View>
 
-      {isSignUp ? (
+        <AuthFieldGroup
+          email={email}
+          password={password}
+          isSignUp={isSignUp}
+          isBusy={isBusy}
+          colors={colors}
+          colorScheme={colorScheme}
+          onEmailChange={setEmail}
+          onPasswordChange={setPassword}
+        />
+
+        {errorMessage && <AuthFeedback message={errorMessage} tone="error" colors={colors} />}
+        {successMessage && <AuthFeedback message={successMessage} tone="success" colors={colors} />}
+
         <Pressable
-          onPress={() => switchMode('sign-in')}
-          disabled={isSubmitting}
+          onPress={handleSubmit}
+          disabled={isBusy}
           accessibilityRole="button"
-          accessibilityLabel="Sign in to existing account"
-          style={({ pressed }) => [styles.linkButton, pressed && styles.pressed]}>
-          <ThemedText style={[styles.linkButtonText, { color: colors.textSecondary, fontFamily: Fonts.rounded }]}>
-            Already have an account?{' '}
-            <ThemedText style={{ color: colors.primary, fontWeight: '600' }}>Sign in</ThemedText>
+          accessibilityLabel={isSignUp ? 'Create my shelf' : 'Sign in'}
+          style={({ pressed }) => [
+            styles.authPrimaryButton,
+            { backgroundColor: colors.primary },
+            (pressed || isSubmitting) && { backgroundColor: colors.primaryPressed },
+            isBusy && styles.buttonDisabled,
+          ]}>
+          {isSubmitting ? (
+            <ActivityIndicator color={colors.onPrimary} />
+          ) : (
+            <ThemedText style={[styles.authPrimaryButtonText, { color: colors.onPrimary, fontFamily: Fonts.rounded }]}>
+              {isSignUp ? 'Create my shelf' : 'Sign in'}
+            </ThemedText>
+          )}
+        </Pressable>
+
+        {isSignUp ? (
+          <Pressable
+            onPress={() => switchMode('sign-in')}
+            disabled={isBusy}
+            accessibilityRole="button"
+            accessibilityLabel="Sign in to existing account"
+            style={({ pressed }) => [styles.authLinkStandalone, pressed && !isBusy && styles.pressed]}>
+            <ThemedText style={[styles.authLinkText, { color: colors.primary, fontFamily: Fonts.rounded }]}>
+              Already have an account? Sign in
+            </ThemedText>
+          </Pressable>
+        ) : (
+          <View style={styles.authLinksGroup}>
+            <Pressable
+              onPress={handleResetPassword}
+              disabled={isBusy}
+              accessibilityRole="button"
+              accessibilityLabel="Forgot password"
+              style={({ pressed }) => [styles.authLinkButton, pressed && !isBusy && styles.pressed]}>
+              {isResettingPassword ? (
+                <ActivityIndicator color={colors.primary} />
+              ) : (
+                <ThemedText style={[styles.authLinkText, { color: colors.primary, fontFamily: Fonts.rounded }]}>
+                  Forgot password?
+                </ThemedText>
+              )}
+            </Pressable>
+            <Pressable
+              onPress={() => switchMode('sign-up')}
+              disabled={isBusy}
+              accessibilityRole="button"
+              accessibilityLabel="Create a new account"
+              style={({ pressed }) => [styles.authLinkButton, pressed && !isBusy && styles.pressed]}>
+              <ThemedText style={[styles.authLinkText, { color: colors.primary, fontFamily: Fonts.rounded }]}>
+                Create an account
+              </ThemedText>
+            </Pressable>
+          </View>
+        )}
+
+        <Pressable
+          onPress={() => {
+            void openPrivacyPolicy();
+          }}
+          disabled={isBusy}
+          accessibilityRole="link"
+          accessibilityLabel="Privacy policy"
+          style={({ pressed }) => [styles.authLinkStandalone, pressed && !isBusy && styles.pressed]}>
+          <ThemedText style={[styles.privacyLinkText, { color: colors.textSecondary, fontFamily: Fonts.rounded }]}>
+            Privacy Policy
           </ThemedText>
         </Pressable>
-      ) : (
-        <>
-          <Pressable
-            onPress={handleResetPassword}
-            disabled={isSubmitting}
-            accessibilityRole="button"
-            accessibilityLabel="Forgot password"
-            style={({ pressed }) => [styles.linkButton, pressed && styles.pressed]}>
-            <ThemedText style={[styles.linkButtonText, { color: colors.primary, fontFamily: Fonts.rounded }]}>
-              Forgot password?
-            </ThemedText>
-          </Pressable>
-          <Pressable
-            onPress={() => switchMode('sign-up')}
-            disabled={isSubmitting}
-            accessibilityRole="button"
-            accessibilityLabel="Create a new account"
-            style={({ pressed }) => [styles.linkButton, pressed && styles.pressed]}>
-            <ThemedText style={[styles.linkButtonText, { color: colors.textSecondary, fontFamily: Fonts.rounded }]}>
-              New here?{' '}
-              <ThemedText style={{ color: colors.primary, fontWeight: '600' }}>Create an account</ThemedText>
-            </ThemedText>
-          </Pressable>
-        </>
-      )}
+      </Animated.View>
     </View>
   );
 }
@@ -296,14 +367,22 @@ function SignedInView({
   colors,
   colorScheme,
   email,
+  emailVerified,
+  isTablet,
 }: {
   colors: ThemeColors;
   colorScheme: ColorScheme;
   email: string;
+  emailVerified: boolean;
+  isTablet: boolean;
 }) {
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isResendingVerification, setIsResendingVerification] = useState(false);
+  const [verificationMessage, setVerificationMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const isBusy = isSigningOut || isDeleting || isResendingVerification;
 
   const handleSignOut = async () => {
     if (isSigningOut || isDeleting) {
@@ -316,13 +395,36 @@ function SignedInView({
     try {
       await signOutUser();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Something went wrong. Please try again.');
+      setErrorMessage(mapAuthError(error));
     } finally {
       setIsSigningOut(false);
     }
   };
 
+  const handleResendVerification = async () => {
+    if (isBusy) {
+      return;
+    }
+
+    setErrorMessage(null);
+    setVerificationMessage(null);
+    setIsResendingVerification(true);
+
+    try {
+      await resendEmailVerification();
+      setVerificationMessage('Verification email sent. Check your inbox.');
+    } catch (error) {
+      setErrorMessage(mapAuthError(error));
+    } finally {
+      setIsResendingVerification(false);
+    }
+  };
+
   const confirmDeleteAccount = () => {
+    if (isBusy) {
+      return;
+    }
+
     Alert.alert(
       'Delete account?',
       'This permanently deletes your Shelfie account and all synced books. Local books on this device will stay.',
@@ -350,18 +452,18 @@ function SignedInView({
     try {
       await deleteAccount();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Something went wrong. Please try again.');
+      setErrorMessage(mapAuthError(error));
     } finally {
       setIsDeleting(false);
     }
   };
 
   return (
-    <View style={[styles.card, styles.authCard, cardStyle(colorScheme)]}>
+    <View style={styles.signedInContent}>
       <ThemedText
         style={[
-          styles.cardTitle,
-          { color: colors.text, fontFamily: Fonts.serif, textAlign: 'center' },
+          styles.signedInTitle,
+          { color: colors.text, fontFamily: Fonts.serif, textAlign: isTablet ? 'center' : 'left' },
         ]}>
         Your account
       </ThemedText>
@@ -370,6 +472,37 @@ function SignedInView({
         <Ionicons name="mail-outline" size={20} color={colors.textSecondary} />
         <ThemedText style={[styles.emailText, { color: colors.text }]}>{email}</ThemedText>
       </View>
+
+      {!emailVerified && (
+        <View style={[styles.verifyRow, { backgroundColor: colors.input, borderColor: colors.border }]}>
+          <ThemedText style={[styles.verifyText, { color: colors.textSecondary, fontFamily: Fonts.rounded }]}>
+            Verify your email — check your inbox
+          </ThemedText>
+          <Pressable
+            onPress={() => {
+              void handleResendVerification();
+            }}
+            disabled={isBusy}
+            accessibilityRole="button"
+            accessibilityLabel="Resend verification email"
+            style={({ pressed }) => [styles.verifyResendButton, pressed && !isBusy && styles.pressed]}>
+            {isResendingVerification ? (
+              <ActivityIndicator color={colors.primary} size="small" />
+            ) : (
+              <ThemedText style={[styles.verifyResendText, { color: colors.primary, fontFamily: Fonts.rounded }]}>
+                Resend
+              </ThemedText>
+            )}
+          </Pressable>
+        </View>
+      )}
+
+      {verificationMessage && (
+        <View style={[styles.banner, { backgroundColor: colors.input, borderColor: colors.olive }]}>
+          <Ionicons name="checkmark-circle-outline" size={20} color={colors.olive} />
+          <ThemedText style={[styles.bannerText, { color: colors.olive }]}>{verificationMessage}</ThemedText>
+        </View>
+      )}
 
       {errorMessage && (
         <View style={[styles.banner, { backgroundColor: colors.input, borderColor: colors.danger }]}>
@@ -380,14 +513,14 @@ function SignedInView({
 
       <Pressable
         onPress={handleSignOut}
-        disabled={isSigningOut || isDeleting}
+        disabled={isBusy}
         accessibilityRole="button"
         accessibilityLabel="Sign out"
         style={({ pressed }) => [
           styles.primaryButton,
           { backgroundColor: colors.primary },
           (pressed || isSigningOut) && { backgroundColor: colors.primaryPressed },
-          (isSigningOut || isDeleting) && styles.buttonDisabled,
+          isBusy && styles.buttonDisabled,
         ]}>
         {isSigningOut ? (
           <ActivityIndicator color={colors.onPrimary} />
@@ -400,14 +533,14 @@ function SignedInView({
 
       <Pressable
         onPress={confirmDeleteAccount}
-        disabled={isSigningOut || isDeleting}
+        disabled={isBusy}
         accessibilityRole="button"
         accessibilityLabel="Delete account"
         style={({ pressed }) => [
           styles.dangerButton,
           { borderColor: colors.danger },
-          pressed && styles.pressed,
-          (isSigningOut || isDeleting) && styles.buttonDisabled,
+          pressed && !isBusy && styles.pressed,
+          isBusy && styles.buttonDisabled,
         ]}>
         {isDeleting ? (
           <ActivityIndicator color={colors.danger} />
@@ -420,6 +553,19 @@ function SignedInView({
           </>
         )}
       </Pressable>
+
+      <Pressable
+        onPress={() => {
+          void openPrivacyPolicy();
+        }}
+        disabled={isBusy}
+        accessibilityRole="link"
+        accessibilityLabel="Privacy policy"
+        style={({ pressed }) => [styles.privacyLinkButton, pressed && !isBusy && styles.pressed]}>
+        <ThemedText style={[styles.privacyLinkText, { color: colors.textSecondary, fontFamily: Fonts.rounded }]}>
+          Privacy Policy
+        </ThemedText>
+      </Pressable>
     </View>
   );
 }
@@ -429,7 +575,15 @@ export default function ProfileScreen() {
   const colors = palette[colorScheme];
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, refreshUser } = useAuth();
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        void refreshUser();
+      }
+    }, [refreshUser, user]),
+  );
 
   const promptLocalBookMigration = useCallback((uid: string, count: number) => {
     if (count === 0) {
@@ -458,7 +612,7 @@ export default function ProfileScreen() {
   const isSignedOut = !isLoading && !user;
   const signedOutVerticalBias = Math.min(height * 0.06, 72);
   const { columnWidth } = useScreenLayout();
-  const authColumnWidth = Math.min(columnWidth, AUTH_CARD_MAX_WIDTH);
+  const authFormWidth = Math.min(columnWidth, AUTH_CARD_MAX_WIDTH);
 
   return (
     <ThemedView style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -467,7 +621,7 @@ export default function ProfileScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={[
-            styles.scrollContent,
+            screenScrollContentStyle,
             isSignedOut && styles.signedOutScrollContent,
             {
               paddingTop: insets.top + 16,
@@ -477,25 +631,28 @@ export default function ProfileScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <ScreenContainer style={isSignedOut ? styles.authScreenContent : undefined}>
-            <ProfileHeader colors={colors} isTablet={isTablet} onBack={() => router.back()} />
+            <ProfileHeader
+              colors={colors}
+              isTablet={isTablet}
+              showTitle={!isSignedOut}
+              onBack={() => router.back()}
+            />
 
             {isLoading ? (
-              <View style={[styles.authPanel, isSignedOut && styles.authPanelCentered]}>
-                <View style={[styles.authCardWrap, { width: authColumnWidth }]}>
-                  <View style={styles.loadingWrap}>
-                    <ActivityIndicator size="large" color={colors.primary} />
-                  </View>
-                </View>
+              <View style={styles.loadingWrap}>
+                <ActivityIndicator size="large" color={colors.primary} />
               </View>
             ) : user ? (
-              <View style={styles.authPanel}>
-                <View style={[styles.authCardWrap, { width: authColumnWidth }]}>
-                  <SignedInView colors={colors} colorScheme={colorScheme} email={user.email ?? 'Signed in'} />
-                </View>
-              </View>
+              <SignedInView
+                colors={colors}
+                colorScheme={colorScheme}
+                email={user.email ?? 'Signed in'}
+                emailVerified={user.emailVerified}
+                isTablet={isTablet}
+              />
             ) : (
-              <View style={[styles.authPanel, styles.authPanelCentered, { paddingBottom: signedOutVerticalBias }]}>
-                <View style={[styles.authCardWrap, { width: authColumnWidth }]}>
+              <View style={[styles.signedOutPanel, { paddingBottom: signedOutVerticalBias }]}>
+                <View style={[styles.authFormColumn, { width: authFormWidth }]}>
                   <SignedOutView
                     colors={colors}
                     colorScheme={colorScheme}
@@ -518,36 +675,33 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  scrollContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-  },
   signedOutScrollContent: {
     flexGrow: 1,
   },
   authScreenContent: {
     flex: 1,
   },
-  authPanel: {
-    width: '100%',
-  },
-  authCardWrap: {
-    alignSelf: 'center',
-  },
-  authPanelCentered: {
+  signedOutPanel: {
     flex: 1,
     justifyContent: 'center',
+    width: '100%',
+  },
+  authFormColumn: {
+    alignSelf: 'center',
+    width: '100%',
   },
   headerBlock: {
     marginBottom: 20,
+    width: '100%',
   },
-  headerBlockCentered: {
-    alignItems: 'center',
+  headerBlockCompact: {
+    marginBottom: 8,
   },
   headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 4,
+    width: '100%',
   },
   headerTopSpacer: {
     flex: 1,
@@ -567,26 +721,100 @@ const styles = StyleSheet.create({
     paddingVertical: 48,
     alignItems: 'center',
   },
-  card: {
-    padding: 20,
+  authSheet: {
+    width: '100%',
+    paddingTop: 8,
+  },
+  authAnimatedBlock: {
+    width: '100%',
+    gap: 0,
+  },
+  authIntro: {
+    marginBottom: 36,
+    gap: 10,
+  },
+  authTitle: {
+    fontSize: 34,
+    lineHeight: 40,
+    fontWeight: '700',
+    letterSpacing: -0.4,
+  },
+  authSubtitle: {
+    fontSize: 17,
+    lineHeight: 24,
+    maxWidth: 320,
+  },
+  fieldGroup: {
+    borderRadius: radii.input,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  fieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 50,
+    paddingHorizontal: 16,
+  },
+  fieldSeparator: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 16,
+  },
+  fieldInput: {
+    flex: 1,
+    fontSize: 17,
+    lineHeight: 22,
+    paddingVertical: 14,
+  },
+  fieldInputWithIcon: {
+    paddingRight: 8,
+  },
+  passwordToggle: {
+    padding: 6,
+  },
+  feedbackText: {
+    fontSize: 15,
+    lineHeight: 21,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  authPrimaryButton: {
+    marginTop: 28,
+    height: 50,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  authPrimaryButtonText: {
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  authLinksGroup: {
+    marginTop: 20,
+    gap: 16,
+    alignItems: 'center',
+  },
+  authLinkButton: {
+    paddingVertical: 6,
+  },
+  authLinkStandalone: {
+    marginTop: 20,
+    paddingVertical: 6,
+    alignSelf: 'center',
+  },
+  authLinkText: {
+    fontSize: 17,
+    lineHeight: 22,
+    textAlign: 'center',
+    fontWeight: '400',
+  },
+  signedInContent: {
+    width: '100%',
     gap: 4,
   },
-  authCard: {
-    width: '100%',
-  },
-  authHero: {
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  cardTitle: {
+  signedInTitle: {
     fontSize: 22,
     lineHeight: 28,
-    marginBottom: 6,
-  },
-  cardSubtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 8,
+    marginBottom: 12,
   },
   banner: {
     flexDirection: 'row',
@@ -604,25 +832,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
   },
-  label: {
-    fontSize: 15,
-    fontWeight: '600',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: radii.input,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  fieldHint: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 4,
-  },
   primaryButton: {
     marginTop: 16,
     borderRadius: radii.button,
@@ -632,16 +841,6 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: 17,
     fontWeight: '700',
-  },
-  linkButton: {
-    alignSelf: 'center',
-    marginTop: 12,
-    paddingVertical: 8,
-  },
-  linkButtonText: {
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: 'center',
   },
   emailRow: {
     flexDirection: 'row',
@@ -658,6 +857,33 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
   },
+  verifyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: radii.input,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 10,
+  },
+  verifyText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  verifyResendButton: {
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+    minWidth: 56,
+    alignItems: 'center',
+  },
+  verifyResendText: {
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 20,
+  },
   dangerButton: {
     marginTop: 12,
     borderWidth: 1,
@@ -671,6 +897,16 @@ const styles = StyleSheet.create({
   dangerButtonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  privacyLinkButton: {
+    marginTop: 18,
+    paddingVertical: 6,
+    alignSelf: 'center',
+  },
+  privacyLinkText: {
+    fontSize: 14,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
   },
   buttonDisabled: {
     opacity: 0.7,

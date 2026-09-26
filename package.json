@@ -1,5 +1,5 @@
 {
-  "name": "bookapp",
+  "name": "shelfie",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {

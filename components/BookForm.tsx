@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ScreenContainer } from '@/components/ScreenContainer';
+import { ScreenContainer, screenScrollContentStyle } from '@/components/ScreenContainer';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Fonts } from '@/constants/theme';
@@ -476,7 +476,7 @@ export default function BookForm({ book, markFinished = false, onSaved, onCancel
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={[
-            styles.scrollContent,
+            screenScrollContentStyle,
             {
               paddingTop: insets.top + 16,
               paddingBottom: insets.bottom + 32,
@@ -735,10 +735,6 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    alignItems: 'center',
   },
   closeButton: {
     alignSelf: 'flex-end',

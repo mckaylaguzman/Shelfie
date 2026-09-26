@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Shelfie Privacy Policy</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f2efe6;
+        --text: #4a3f35;
+        --muted: #7a6455;
+        --card: #faf7f0;
+        --border: #b8c8d4;
+        --accent: #c17b5a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: Georgia, 'Times New Roman', serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 48px 24px 80px;
+      }
+      h1,
+      h2 {
+        font-weight: 600;
+        line-height: 1.25;
+      }
+      h1 {
+        font-size: 2rem;
+        margin: 0 0 8px;
+      }
+      h2 {
+        font-size: 1.25rem;
+        margin: 32px 0 12px;
+      }
+      p,
+      li {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        color: var(--text);
+      }
+      .meta {
+        color: var(--muted);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-size: 0.95rem;
+        margin-bottom: 28px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 20px 22px;
+      }
+      a {
+        color: var(--accent);
+      }
+      ul {
+        padding-left: 1.2rem;
+      }
+      li {
+        margin-bottom: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Shelfie Privacy Policy</h1>
+      <p class="meta">Last updated: September 25, 2026</p>
+
+      <div class="card">
+        <p>
+          Shelfie (“we”, “us”) is a personal book-tracking app. This policy explains what information
+          the app collects, how it is used, and the choices you have.
+        </p>
+
+        <h2>Information we collect</h2>
+        <ul>
+          <li>
+            <strong>Account information.</strong> If you create an account, we collect your email
+            address and authentication credentials (handled by Firebase Authentication).
+          </li>
+          <li>
+            <strong>Library data.</strong> Book titles, authors, reading status, format, ratings,
+            finish dates, written reviews, and optional cover images you add.
+          </li>
+          <li>
+            <strong>Photos you choose.</strong> If you pick a cover from your photo library, Shelfie
+            accesses only the image you select. We do not browse your full photo library.
+          </li>
+          <li>
+            <strong>Device storage.</strong> Books and covers may also be stored locally on your
+            device (including when you are signed out).
+          </li>
+        </ul>
+
+        <h2>How we use information</h2>
+        <ul>
+          <li>To provide and sync your personal reading shelf across devices when you are signed in.</li>
+          <li>To look up book metadata and cover art via third-party book search services (Google Books and Open Library) based on search queries you enter.</li>
+          <li>To operate account features such as email verification, password reset, and account deletion.</li>
+        </ul>
+
+        <h2>Where data is stored</h2>
+        <ul>
+          <li>
+            <strong>On your device</strong> using local storage (SQLite and the device file system for
+            cover images).
+          </li>
+          <li>
+            <strong>In the cloud</strong> with Firebase (Google) when you create an account and sync
+            your shelf, including authentication and book data associated with your user ID.
+          </li>
+        </ul>
+
+        <h2>Third-party services</h2>
+        <p>Shelfie relies on:</p>
+        <ul>
+          <li>Firebase Authentication and Firebase/Firestore (or related Firebase storage) for accounts and synced library data</li>
+          <li>Google Books API and Open Library for book search results and cover references</li>
+        </ul>
+        <p>
+          Those services process data according to their own privacy policies. Shelfie does not sell
+          your personal information.
+        </p>
+
+        <h2>Data sharing</h2>
+        <p>
+          Your shelf is private to your account. We do not operate a public social feed of reviews.
+          We do not sell personal data. Limited technical data may be processed by the infrastructure
+          providers above solely to run the app.
+        </p>
+
+        <h2>Account deletion</h2>
+        <p>
+          You can delete your account from Profile → Delete Account. This permanently deletes your
+          Shelfie account and synced cloud books. Books stored only on the device may remain until
+          you remove the app or clear that local data.
+        </p>
+
+        <h2>Children’s privacy</h2>
+        <p>
+          Shelfie is not directed to children under 13, and we do not knowingly collect personal
+          information from children under 13.
+        </p>
+
+        <h2>Changes</h2>
+        <p>
+          We may update this policy from time to time. The “Last updated” date at the top will
+          change when we do. Continued use of Shelfie after an update means you accept the revised
+          policy.
+        </p>
+
+        <h2>Contact</h2>
+        <p>
+          Questions about privacy can be sent through the support contact listed on Shelfie’s App
+          Store page, or by opening an issue on the
+          <a href="https://github.com/mckaylaguzman/Shelfie">Shelfie GitHub repository</a>.
+        </p>
+      </div>
+    </main>
+  </body>
+</html>

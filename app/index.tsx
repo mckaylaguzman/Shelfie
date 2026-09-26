@@ -12,18 +12,20 @@ import {
   StyleSheet,
   useWindowDimensions,
   View,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import BookDetailModal from '@/components/BookDetailModal';
 import BookForm from '@/components/BookForm';
-import { ScreenContainer, useScreenLayout } from '@/components/ScreenContainer';
+import { ScreenContainer, screenScrollContentStyle, useScreenLayout } from '@/components/ScreenContainer';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { isLargeTabletLayout, isTabletLayout } from '@/constants/cozy-theme';
 import { Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { getAllBooks } from '@/src/services/storage';
+import { useAuth } from '@/src/services/auth';
+import { loadBooksForDisplay } from '@/src/services/storage';
 import type { Book, BookFormat } from '@/src/types/book';
 import {
   cardShadow,
@@ -342,11 +344,11 @@ function FinishedListCard({
           {
             flex: 1,
             minWidth: 0,
-            minHeight: coverHeight - (compact ? 16 : 14),
+            height: coverHeight - (compact ? 16 : 14),
             paddingLeft: coverWidth * 0.48,
           },
         ]}>
-        <View style={styles.finishedBody}>
+        <View style={[styles.finishedBody, compact && styles.finishedBodyCompact]}>
           <View style={styles.finishedTitleRow}>
             {book.format === 'audiobook' && (
               <Ionicons
@@ -357,7 +359,8 @@ function FinishedListCard({
               />
             )}
             <ThemedText
-              numberOfLines={2}
+              numberOfLines={compact ? 1 : 2}
+              ellipsizeMode="tail"
               style={[
                 styles.finishedTitleText,
                 compact ? styles.finishedTitleCompact : styles.finishedTitle,
@@ -368,6 +371,7 @@ function FinishedListCard({
           </View>
           <ThemedText
             numberOfLines={1}
+            ellipsizeMode="tail"
             style={[
               compact ? styles.finishedAuthorCompact : styles.finishedAuthor,
               { color: colors.textSecondary },
@@ -376,7 +380,8 @@ function FinishedListCard({
           </ThemedText>
           <StarRow rating={book.rating} size={compact ? 13 : 14} colors={colors} />
           <ThemedText
-            numberOfLines={2}
+            numberOfLines={1}
+            ellipsizeMode="tail"
             style={[
               compact ? styles.finishedReviewCompact : styles.finishedReview,
               { color: colors.textSecondary },
@@ -485,6 +490,7 @@ function HomeHeader({
   readingCount,
   tbrCount,
   centered = false,
+  onYearReviewPress,
   onProfilePress,
 }: {
   colors: ThemeColors;
@@ -493,6 +499,7 @@ function HomeHeader({
   readingCount: number;
   tbrCount: number;
   centered?: boolean;
+  onYearReviewPress: () => void;
   onProfilePress: () => void;
 }) {
   const contextLine =
@@ -507,12 +514,19 @@ function HomeHeader({
   return (
     <View style={[styles.headerBlock, centered && styles.headerBlockCentered]}>
       <View style={styles.headerTopRow}>
+        <Pressable
+          onPress={onYearReviewPress}
+          accessibilityRole="button"
+          accessibilityLabel="Year in books"
+          style={({ pressed }) => [styles.headerIconButton, pressed && styles.pressed]}>
+          <Ionicons name="calendar-outline" size={26} color={colors.textSecondary} />
+        </Pressable>
         <View style={styles.headerTopSpacer} />
         <Pressable
           onPress={onProfilePress}
           accessibilityRole="button"
           accessibilityLabel="Open profile"
-          style={({ pressed }) => [styles.profileButton, pressed && styles.pressed]}>
+          style={({ pressed }) => [styles.headerIconButton, pressed && styles.pressed]}>
           <Ionicons name="person-circle-outline" size={32} color={colors.textSecondary} />
         </Pressable>
       </View>
@@ -555,13 +569,20 @@ function HomeHeader({
 function EmptyShelf({ colors, colorScheme }: { colors: ThemeColors; colorScheme: ColorScheme }) {
   return (
     <View style={[styles.emptyState, cardStyle(colorScheme)]}>
-      <ThemedText style={styles.emptyEmoji}>📖</ThemedText>
       <ThemedText style={[styles.emptyTitle, { color: colors.text, fontFamily: Fonts.serif }]}>
         Your shelf is waiting for its first book.
       </ThemedText>
       <ThemedText style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
         Tap the + button to add a book to your shelf.
       </ThemedText>
+    </View>
+  );
+}
+
+function ShelfLoading({ colors }: { colors: ThemeColors }) {
+  return (
+    <View style={styles.loadingState}>
+      <ActivityIndicator size="large" color={colors.primary} />
     </View>
   );
 }
@@ -579,7 +600,10 @@ export default function HomeScreen() {
   const { edgeInset } = useScreenLayout();
   const carouselCoverWidth = isLargeTablet ? 160 : isTablet ? 140 : 104;
 
+  const { user, isLoading: isAuthLoading } = useAuth();
+
   const [books, setBooks] = useState<Book[]>([]);
+  const [isLoadingBooks, setIsLoadingBooks] = useState(true);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
@@ -588,13 +612,25 @@ export default function HomeScreen() {
   const [finishedFormatFilter, setFinishedFormatFilter] = useState<BookFormat>('physical');
 
   const loadBooks = useCallback(async () => {
-    const savedBooks = await getAllBooks();
-    setBooks(savedBooks);
-  }, []);
+    if (isAuthLoading) {
+      return;
+    }
+
+    setIsLoadingBooks(true);
+
+    try {
+      await loadBooksForDisplay({
+        uid: user?.uid ?? null,
+        onBooks: setBooks,
+      });
+    } finally {
+      setIsLoadingBooks(false);
+    }
+  }, [isAuthLoading, user?.uid]);
 
   useFocusEffect(
     useCallback(() => {
-      loadBooks();
+      void loadBooks();
     }, [loadBooks]),
   );
 
@@ -634,6 +670,11 @@ export default function HomeScreen() {
     await loadBooks();
   };
 
+  const handleDetailUpdated = async () => {
+    setSelectedBook(null);
+    await loadBooks();
+  };
+
   const handleEditBook = (book: Book) => {
     setSelectedBook(null);
     setMarkingFinishedBook(null);
@@ -649,14 +690,28 @@ export default function HomeScreen() {
   const showFormModal = showAddForm || !!editingBook || !!markingFinishedBook;
   const formBook = markingFinishedBook ?? editingBook ?? undefined;
   const hasAnyBooks = books.length > 0;
+  const showInitialLoading = (isAuthLoading || isLoadingBooks) && !hasAnyBooks;
+
+  const homeHeader = (
+    <HomeHeader
+      colors={colors}
+      colorScheme={colorScheme}
+      stats={stats}
+      readingCount={readingBooks.length}
+      tbrCount={tbrBooks.length}
+      centered={isTablet}
+      onYearReviewPress={() => router.push('/year-review')}
+      onProfilePress={() => router.push('/profile')}
+    />
+  );
 
   return (
     <ThemedView style={[styles.screen, { backgroundColor: colors.background }]}>
-      {!hasAnyBooks ? (
+      {showInitialLoading ? (
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={[
-            styles.emptyScrollContent,
+            screenScrollContentStyle,
             {
               paddingTop: insets.top + 16,
               paddingBottom: insets.bottom + 96,
@@ -664,15 +719,23 @@ export default function HomeScreen() {
           ]}
           showsVerticalScrollIndicator={false}>
           <ScreenContainer>
-            <HomeHeader
-              colors={colors}
-              colorScheme={colorScheme}
-              stats={stats}
-              readingCount={readingBooks.length}
-              tbrCount={tbrBooks.length}
-              centered={isTablet}
-              onProfilePress={() => router.push('/profile')}
-            />
+            {homeHeader}
+            <ShelfLoading colors={colors} />
+          </ScreenContainer>
+        </ScrollView>
+      ) : !hasAnyBooks ? (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[
+            screenScrollContentStyle,
+            {
+              paddingTop: insets.top + 16,
+              paddingBottom: insets.bottom + 96,
+            },
+          ]}
+          showsVerticalScrollIndicator={false}>
+          <ScreenContainer>
+            {homeHeader}
             <EmptyShelf colors={colors} colorScheme={colorScheme} />
           </ScreenContainer>
         </ScrollView>
@@ -680,7 +743,7 @@ export default function HomeScreen() {
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={[
-            styles.listContent,
+            screenScrollContentStyle,
             {
               paddingTop: insets.top + 16,
               paddingBottom: insets.bottom + 96,
@@ -689,15 +752,7 @@ export default function HomeScreen() {
           nestedScrollEnabled
           showsVerticalScrollIndicator={false}>
           <ScreenContainer>
-            <HomeHeader
-              colors={colors}
-              colorScheme={colorScheme}
-              stats={stats}
-              readingCount={readingBooks.length}
-              tbrCount={tbrBooks.length}
-              centered={isTablet}
-              onProfilePress={() => router.push('/profile')}
-            />
+            {homeHeader}
 
             {readingBooks.length > 0 && (
               <View style={styles.section}>
@@ -778,6 +833,7 @@ export default function HomeScreen() {
         onEdit={handleEditBook}
         onMarkFinished={handleMarkFinished}
         onDeleted={handleBookDeleted}
+        onBookUpdated={handleDetailUpdated}
       />
 
       <Modal
@@ -811,14 +867,6 @@ const styles = StyleSheet.create({
   scroll: {
     flex: 1,
   },
-  listContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-  },
-  emptyScrollContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-  },
   headerBlock: {
     marginBottom: 4,
   },
@@ -833,7 +881,7 @@ const styles = StyleSheet.create({
   headerTopSpacer: {
     flex: 1,
   },
-  profileButton: {
+  headerIconButton: {
     padding: 4,
   },
   greeting: {
@@ -949,17 +997,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingRight: 14,
     paddingVertical: 14,
+    overflow: 'hidden',
   },
   finishedCardCompact: {
     paddingRight: 10,
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
   finishedBody: {
+    flex: 1,
+    minHeight: 0,
+    justifyContent: 'center',
+    overflow: 'hidden',
     gap: 5,
+  },
+  finishedBodyCompact: {
+    gap: 3,
   },
   finishedTitleRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    flexShrink: 1,
+    minWidth: 0,
     gap: 6,
   },
   finishedFormatIcon: {
@@ -967,6 +1025,7 @@ const styles = StyleSheet.create({
   },
   finishedTitleText: {
     flex: 1,
+    minWidth: 0,
   },
   finishedTitle: {
     fontSize: 16,
@@ -982,16 +1041,19 @@ const styles = StyleSheet.create({
   },
   finishedAuthorCompact: {
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 17,
   },
   finishedReview: {
+    flexShrink: 0,
     fontSize: 13,
     lineHeight: 19,
   },
   finishedReviewCompact: {
+    flexShrink: 0,
     fontSize: 12,
-    lineHeight: 17,
+    lineHeight: 16,
   },
+
   finishedList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1020,9 +1082,10 @@ const styles = StyleSheet.create({
     paddingVertical: 48,
     gap: 10,
   },
-  emptyEmoji: {
-    fontSize: 40,
-    marginBottom: 4,
+  loadingState: {
+    marginTop: 48,
+    alignItems: 'center',
+    paddingVertical: 32,
   },
   emptyTitle: {
     fontSize: 22,

@@ -12,13 +12,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ScreenContainer } from '@/components/ScreenContainer';
+import { ScreenContainer, screenScrollContentStyle, useScreenLayout } from '@/components/ScreenContainer';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { formatBookDate, isTabletLayout } from '@/constants/cozy-theme';
 import { Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { deleteBook, getStatusLabel } from '@/src/services/storage';
+import { deleteBook, getStatusLabel, updateBook } from '@/src/services/storage';
 import type { Book } from '@/src/types/book';
 import {
   cardStyle,
@@ -35,6 +35,7 @@ type BookDetailModalProps = {
   onEdit: (book: Book) => void;
   onMarkFinished: (book: Book) => void;
   onDeleted: () => void;
+  onBookUpdated?: () => void;
 };
 
 function StarDisplay({
@@ -60,12 +61,25 @@ function StarDisplay({
   );
 }
 
-function StatusBadge({ book, colors }: { book: Book; colors: ThemeColors }) {
+function StatusBadge({
+  book,
+  colors,
+  centered = false,
+}: {
+  book: Book;
+  colors: ThemeColors;
+  centered?: boolean;
+}) {
   const badgeColor =
     book.status === 'reading' ? colors.olive : book.status === 'tbr' ? colors.pink : colors.mint;
 
   return (
-    <View style={[styles.statusBadge, { backgroundColor: badgeColor }]}>
+    <View
+      style={[
+        styles.statusBadge,
+        { backgroundColor: badgeColor },
+        centered && styles.statusBadgeCentered,
+      ]}>
       <ThemedText style={[styles.statusBadgeText, { color: colors.text, fontFamily: Fonts.rounded }]}>
         {getStatusLabel(book.status)}
       </ThemedText>
@@ -118,19 +132,26 @@ export default function BookDetailModal({
   onEdit,
   onMarkFinished,
   onDeleted,
+  onBookUpdated,
 }: BookDetailModalProps) {
   const colorScheme = (useColorScheme() ?? 'light') as ColorScheme;
   const colors = palette[colorScheme];
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  const isTablet = isTabletLayout(width, { isPad: Platform.OS === 'ios' && Platform.isPad });
-  const coverWidth = isTablet ? 148 : 126;
+  const isPad = Platform.OS === 'ios' && Platform.isPad;
+  const isTablet = isTabletLayout(width, { isPad });
+  const { columnWidth } = useScreenLayout();
+  const coverWidth = isTablet
+    ? Math.min(168, Math.round(columnWidth * 0.28))
+    : Math.min(168, Math.round(columnWidth * 0.48));
   const maxReviewHeight = Math.round(height * 0.28);
 
   if (!book) {
     return null;
   }
 
+  const isTbr = book.status === 'tbr';
+  const isReading = book.status === 'reading';
   const isFinished = book.status === 'finished';
   const reviewText = book.review.trim() || 'No review written yet.';
   const isLongReview = reviewText.length > 200 || reviewText.split('\n').length > 5;
@@ -153,18 +174,24 @@ export default function BookDetailModal({
     );
   };
 
+  const handleStartReading = async () => {
+    await updateBook(book.id, { status: 'reading' });
+    onBookUpdated?.();
+  };
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <ThemedView style={[styles.screen, { backgroundColor: colors.background }]}>
-        <View
-          style={[
-            styles.page,
+        <ScrollView
+          contentContainerStyle={[
+            screenScrollContentStyle,
             {
-              paddingTop: insets.top + 12,
-              paddingBottom: insets.bottom + 16,
+              paddingTop: insets.top + 16,
+              paddingBottom: insets.bottom + 24,
             },
-          ]}>
-          <ScreenContainer style={styles.content}>
+          ]}
+          showsVerticalScrollIndicator={false}>
+          <ScreenContainer>
             <View style={styles.headerRow}>
               <Pressable
                 onPress={onClose}
@@ -172,26 +199,43 @@ export default function BookDetailModal({
                 accessibilityLabel="Close book details"
                 hitSlop={8}
                 style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
-                <Ionicons name="close" size={24} color={colors.text} />
+                <Ionicons name="close" size={isTablet ? 26 : 28} color={colors.text} />
               </Pressable>
             </View>
 
-            <View style={[styles.heroCard, cardStyle(colorScheme)]}>
+            <View
+              style={[
+                styles.heroCard,
+                isTablet ? styles.heroCardTablet : styles.heroCardPhone,
+                cardStyle(colorScheme),
+              ]}>
               <CoverImage book={book} width={coverWidth} colors={colors} />
 
-              <View style={styles.heroText}>
-                <StatusBadge book={book} colors={colors} />
+              <View style={[styles.heroText, !isTablet && styles.heroTextPhone]}>
+                <StatusBadge book={book} colors={colors} centered={!isTablet} />
                 <ThemedText
-                  style={[styles.title, { color: colors.text, fontFamily: Fonts.serif }]}>
+                  style={[
+                    isTablet ? styles.titleTablet : styles.title,
+                    { color: colors.text, fontFamily: Fonts.serif },
+                  ]}>
                   {book.title}
                 </ThemedText>
-                <ThemedText style={[styles.author, { color: colors.textSecondary }]}>
+                <ThemedText
+                  style={[
+                    isTablet ? styles.authorTablet : styles.author,
+                    { color: colors.textSecondary },
+                  ]}>
                   {book.author}
                 </ThemedText>
                 {isFinished && (
                   <>
-                    <StarDisplay rating={book.rating} size={18} colors={colors} />
-                    <ThemedText style={[styles.date, { color: colors.textSecondary }]}>
+                    <StarDisplay rating={book.rating} size={isTablet ? 18 : 20} colors={colors} />
+                    <ThemedText
+                      style={[
+                        styles.date,
+                        !isTablet && styles.datePhone,
+                        { color: colors.textSecondary },
+                      ]}>
                       Finished {formatBookDate(book.dateFinished)}
                     </ThemedText>
                   </>
@@ -220,7 +264,26 @@ export default function BookDetailModal({
             )}
 
             <View style={styles.actions}>
-              {!isFinished && (
+              {isTbr && (
+                <Pressable
+                  onPress={() => {
+                    void handleStartReading();
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Start reading"
+                  style={({ pressed }) => [
+                    styles.actionButton,
+                    { backgroundColor: colors.primary },
+                    pressed && { backgroundColor: colors.primaryPressed },
+                  ]}>
+                  <Ionicons name="book-outline" size={20} color={colors.onPrimary} />
+                  <ThemedText style={[styles.actionText, { color: colors.onPrimary, fontFamily: Fonts.rounded }]}>
+                    Start Reading
+                  </ThemedText>
+                </Pressable>
+              )}
+
+              {isReading && (
                 <Pressable
                   onPress={() => onMarkFinished(book)}
                   style={({ pressed }) => [
@@ -276,7 +339,7 @@ export default function BookDetailModal({
               </Pressable>
             </View>
           </ScreenContainer>
-        </View>
+        </ScrollView>
       </ThemedView>
     </Modal>
   );
@@ -286,28 +349,30 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
-  page: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  content: {
-    flex: 1,
-    width: '100%',
-    alignSelf: 'center',
-  },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   iconButton: {
     padding: 4,
   },
   heroCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     gap: 16,
     padding: 16,
+  },
+  heroCardPhone: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 18,
+    gap: 18,
+  },
+  heroCardTablet: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 20,
+    gap: 20,
   },
   coverFallback: {
     borderWidth: 1,
@@ -319,27 +384,49 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingTop: 2,
   },
+  heroTextPhone: {
+    flex: 0,
+    width: '100%',
+    alignItems: 'center',
+    gap: 8,
+  },
   statusBadge: {
     alignSelf: 'flex-start',
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
+  statusBadgeCentered: {
+    alignSelf: 'center',
+  },
   statusBadgeText: {
     fontSize: 13,
     fontWeight: '700',
   },
   title: {
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 26,
+    lineHeight: 32,
+    textAlign: 'center',
+  },
+  titleTablet: {
+    fontSize: 24,
+    lineHeight: 30,
   },
   author: {
-    fontSize: 15,
-    lineHeight: 21,
+    fontSize: 16,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  authorTablet: {
+    fontSize: 16,
+    lineHeight: 22,
   },
   date: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  datePhone: {
+    textAlign: 'center',
   },
   starRow: {
     flexDirection: 'row',
@@ -362,8 +449,7 @@ const styles = StyleSheet.create({
     lineHeight: 23,
   },
   actions: {
-    marginTop: 'auto',
-    paddingTop: 14,
+    marginTop: 20,
     gap: 10,
   },
   actionButton: {
